@@ -1,11 +1,25 @@
-# Use official lightweight NGINX image
-FROM nginx:stable-alpine
+#  Base image with Node.js
+FROM node:18-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
 
-# Copy your site’s files into NGINX’s default public directory
-COPY . /usr/share/nginx/html
+#  Build the app
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
 
-# Expose port 80 (the web port)
-EXPOSE 80
+#  Run the app in production mode
+FROM node:18-alpine AS runner
+WORKDIR /app
 
-# Run NGINX in the foreground
-CMD ["nginx", "-g", "daemon off;"]
+# Copy only what’s needed to run
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+
+EXPOSE 3000
+CMD ["npm", "start"]
